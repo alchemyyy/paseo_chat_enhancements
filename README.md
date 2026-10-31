@@ -1,6 +1,6 @@
 # Chat enhancements
 
-Paseo plugin that turns absolute file and folder paths outside the workspace into clickable links anywhere in agent chat. Clicking a link opens a file in the default text editor or a folder in the file browser.
+Paseo plugin that turns absolute file and folder paths outside the workspace into clickable links anywhere in agent chat, and copies rendered chat Markdown as its Markdown source. Clicking a link opens a file in the default text editor or a folder in the file browser.
 
 ## Install
 
@@ -39,8 +39,25 @@ Option: `-PaseoCli <path>` points to `paseo.cmd` if it is not on `PATH` or in th
 - Server RPCs: `paths.resolve` (up to 256 paths per call, 1024 characters each) reports which paths are an existing file or folder outside the workspace; `paths.open` opens one path.
 - A path whose lookup takes over 3 seconds, such as one on an unreachable network share, is not linked.
 
+### Copy as Markdown
+
+- Copying a selection of rendered Markdown in a chat (Ctrl+C or the context menu) puts the Markdown it was rendered from on the clipboard as plain text, instead of the rendered text or Paseo's regenerated Markdown. Rich-text targets still receive Paseo's formatted HTML.
+- The copy runs from the first selected character to the last; markup outside the selection is never added. Markup the selection cuts through is removed, so nothing is left half open:
+  - Inline code, emphasis, strikethrough, links, and autolinks keep their markup only when the selection covers them whole. Copying `` `hello` there `` from the start of `hello` gives `hello there`; part of a link copies as its text, without the target.
+  - A heading, quote, list item, or code block the selection starts inside loses its markup there: the closing `##` or underline, quote markers, list indentation, and the closing fence. One the selection starts before keeps it. A code block cut at its end keeps its opening fence, which is still valid Markdown.
+  - Table rows keep their pipes and delimiter row. When the selection spans several cells, a cell selected whole brings its outer pipes, so a selected table copies as a table.
+- Escapes (`\*`), entities (`&amp;`), images, and line breaks copy as written. Blank lines at the start and end are dropped.
+- A selection running past the start or end of a message takes that message's Markdown up to its start or end. Across messages, each message's Markdown is separated by a blank line, and the text between them (your messages, tool rows) is copied as plain text.
+- Selections that cover no rendered Markdown, or reach outside the chat, copy as before.
+
 ## Limitations
 
 - Works only in the web and desktop (Electron) clients, and needs the browser's CSS Custom Highlight API. Links are off elsewhere.
 - Paths are resolved and opened on the machine running the Paseo daemon, not necessarily the machine showing the chat.
 - The plugin finds chats through Paseo's internal `agent-chat-scroll` test id, and the chat's workspace through Paseo's internal React pane context. A Paseo update may break these: without chats nothing is linked; without the workspace, paths inside the workspace are linked too.
+- Copy as Markdown reads each message's source from the props of Paseo's internal `MarkdownRenderer`, and its rendered text through the `enrm-text` class of the Markdown renderer. If a Paseo update changes either, copies fall back to Paseo's own. Text the renderer adds, such as a GitHub alert's title, is not copied.
+
+## Development
+
+- `npm run vendor` (`scripts/vendor.mjs`) builds `client/vendor/markdown-tokens.js` from `vendor-src/markdown-tokens.ts`, bundling micromark and its GFM extensions (an installed plugin has no `node_modules`), and `client/vendor/THIRD_PARTY_LICENSES.txt`. `markdown-tokens.d.ts` beside it is hand-written.
+- `npm run typecheck`, `npm test`.

@@ -1,5 +1,6 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
 import { Platform } from "react-native";
+import { startMarkdownCopy } from "./client/markdown-copy";
 import { startPathLinks } from "./client/path-links";
 import { startSendQueuedShortcut } from "./client/send-queued";
 import { openPathRpc, resolvePathsRpc } from "./shared/contracts";
@@ -12,7 +13,9 @@ export default function contribute(client: PluginClientContext) {
     (path) => client.rpc(openPathRpc, { path }),
   );
   const stopSendQueued = startSendQueuedShortcut();
+  const stopMarkdownCopy = startMarkdownCopy();
   return () => {
+    stopMarkdownCopy();
     stopSendQueued();
     stopPathLinks();
   };
