@@ -1,0 +1,34 @@
+{
+  "name": "chat-enhancements",
+  "private": true,
+  "version": "0.1.0",
+  "files": [
+    "paseo-plugin.json",
+    "index.client.tsx",
+    "index.server.ts",
+    "client/",
+    "server/",
+    "shared/"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "vendor": "node scripts/vendor.mjs",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"client/*.test.ts\" \"server/*.test.ts\""
+  },
+  "devDependencies": {
+    "@getpaseo/plugin": "0.13.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "~19.2.0",
+    "decode-named-character-reference": "^1.3.0",
+    "esbuild": "^0.25.12",
+    "micromark": "^4.0.3",
+    "micromark-extension-gfm-autolink-literal": "^2.1.0",
+    "micromark-extension-gfm-strikethrough": "^2.1.0",
+    "micromark-extension-gfm-table": "^2.1.2",
+    "micromark-extension-gfm-task-list-item": "^2.1.0",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "typescript": "^5.9.3",
+    "zod": "^4.4.3"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "id": "chat-enhancements",
+  "name": "Chat enhancements",
+  "description": "Links absolute file and folder paths outside the workspace anywhere in chat (files open in the default text editor, folders in the file browser), and Ctrl+Enter sends the oldest queued message",
+  "requirements": { "paseo": ">=0.13.0" }
+}
