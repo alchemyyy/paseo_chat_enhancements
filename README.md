@@ -4,16 +4,17 @@ Paseo plugin that turns absolute file and folder paths outside the workspace int
 
 ## Install
 
-1. Install [Paseo](https://paseo.sh) 0.13.0 or later and launch it once.
-2. Run the setup script from this folder:
+Requires [Paseo](https://paseo.sh) 0.13.0 or later with plugins turned on (Settings > Plugins > Enable plugins).
 
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File install.ps1
-   ```
+```sh
+paseo plugin install https://github.com/alchemyyy/paseo_chat_enhancements
+```
 
-   It installs the plugin with `paseo plugin install <folder>`, or runs `paseo plugin reload chat-enhancements` if the plugin is already installed. Run it again to reload the plugin after editing it. If plugins are disabled in `~/.paseo/config.json`, it warns you: turn on **Settings > Plugins > Enable plugins**, or set `pluginsEnabled` to `true` and run `paseo reload`.
+`paseo plugin update chat-enhancements` updates it, and `paseo plugin remove chat-enhancements` removes it. The [Plugin manager](https://github.com/alchemyyy/paseo_plugin_manager) plugin checks and updates installed plugins from the sidebar.
 
-Option: `-PaseoCli <path>` points to `paseo.cmd` if it is not on `PATH` or in the default Paseo install folders.
+The `paseo` command comes with the desktop app: Settings > Integrations > Command line puts it on `PATH`, or run `paseo.cmd` from the app's `resources\bin` folder.
+
+To work on the plugin, clone this repository and install the folder instead (`paseo plugin install <folder>`), then run `paseo plugin reload chat-enhancements` after editing it.
 
 ## Features
 
