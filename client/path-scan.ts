@@ -26,6 +26,9 @@ const SPACE = /[ \u00a0]/;
 const TRAILING_PUNCTUATION = /[.,;:!?'")\]}>]$/;
 /** `:12`, `:12:3`, `:12-20` after a file name */
 const LINE_SUFFIX = /:\d+(?::\d+)?(?:-\d+)?$/;
+/** Texts that are not relative paths: URLs, drive paths, and rooted, home, fragment, or query texts */
+const NOT_RELATIVE = /^(?:[A-Za-z][\w+.-]*:(?!\d)|[\\/~#?])|[\s"<>|*?]/;
+const SEPARATOR = /[\\/]/;
 /** Spaces a path may contain, as in `C:\Program Files\...`; longer runs are prose */
 const MAX_SPACES = 8;
 const MAX_PATH_LENGTH = 400;
@@ -86,4 +89,21 @@ export function selectPaths(
     }
   }
   return matches;
+}
+
+/** The folder an existing path puts relative paths in: a folder itself, or a file's parent */
+export function folderOf(match: Pick<PathMatch, "text" | "kind">): string | null {
+  if (match.kind === "directory") return match.text;
+  const end = Math.max(match.text.lastIndexOf("\\"), match.text.lastIndexOf("/"));
+  return end > 0 ? match.text.slice(0, end + 1) : null;
+}
+
+/** Absolute texts `relative` may name inside `folder`: as written, then without a line suffix */
+export function joinRelativePath(folder: string, relative: string): string[] {
+  if (!relative || NOT_RELATIVE.test(relative)) return [];
+  const name = relative.replace(/^\.[\\/]/, "");
+  const separator = folder.includes("\\") ? "\\" : "/";
+  const joined = SEPARATOR.test(folder.at(-1) ?? "") ? folder + name : folder + separator + name;
+  const withoutLine = joined.replace(LINE_SUFFIX, "");
+  return withoutLine === joined ? [joined] : [joined, withoutLine];
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { findPathCandidates, selectPaths } from "./path-scan.ts";
+import { findPathCandidates, folderOf, joinRelativePath, selectPaths } from "./path-scan.ts";
 
 const startsOf = (text: string) => findPathCandidates(text).map(({ start }) => text.slice(start, start + 6));
 
@@ -60,4 +60,22 @@ test("the longest existing text wins and later roots inside it are skipped", () 
   );
   const nested = selectPaths(findPathCandidates("/a/b /c"), (path) => (path === "/a/b /c" ? "file" : "directory"));
   assert.deepEqual(nested.map(({ text: path }) => path), ["/a/b /c"]);
+});
+
+test("relative paths join a named folder, or a named file's folder, in its separator style", () => {
+  const folder = folderOf({ text: "C:\\x\\pair\\", kind: "directory" })!;
+  assert.deepEqual(joinRelativePath(folder, "NOTES-1.md"), ["C:\\x\\pair\\NOTES-1.md"]);
+  assert.deepEqual(joinRelativePath(folderOf({ text: "C:\\x\\pair", kind: "directory" })!, "./a/b.md"), [
+    "C:\\x\\pair\\a/b.md",
+  ]);
+  assert.deepEqual(joinRelativePath(folderOf({ text: "/srv/app/README.md", kind: "file" })!, "lib.ts:12"), [
+    "/srv/app/lib.ts:12",
+    "/srv/app/lib.ts",
+  ]);
+});
+
+test("URLs, absolute paths, and texts with spaces are not relative paths", () => {
+  for (const text of ["https://a.b/c", "mailto:x@y", "C:\\a", "C:/a", "/a", "\\\\s\\x", "~/a", "#top", "a b.md", ""]) {
+    assert.deepEqual(joinRelativePath("/base", text), [], text);
+  }
 });

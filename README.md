@@ -25,7 +25,9 @@ To work on the plugin, clone this repository and install the folder instead (`pa
   - macOS and Linux hosts: `/...` and `~/` paths.
 - Paths may contain up to 8 spaces (for example `C:\Program Files\...`) and up to 400 characters. A trailing line suffix (`:12`, `:12:3`, `:12-20`) or trailing punctuation is dropped when the path without it exists. The longest existing path wins.
 - Only links paths that exist on the daemon host, are a file or folder, and lie outside the chat's workspace folder (case-insensitive on Windows). Paths inside the workspace are left to Paseo.
-- Does not link text inside existing links, text inputs, or editable fields. Relative paths and URLs are not matched.
+- Does not link text inside text inputs or editable fields. URLs are not matched.
+- Relative paths are linked only where Paseo already made them a link, such as `NOTES.md` in code or in a table. Paseo looks those up only inside the workspace, so the plugin also tries each folder the same message names by absolute path (a named folder, or a named file's folder). The first folder holding the path that exists outside the workspace takes over the click; otherwise the link stays Paseo's.
+- Other existing links are left alone.
 - Paths that did not exist are checked again after 15 seconds, so files an agent creates later become links.
 - Links use Paseo's own link color with a dotted underline, which turns solid on hover. Hovering shows a tooltip: "Open in text editor: <path>" or "Open in file browser: <path>".
 - Left-click opens the path. Releasing a text-selection drag over a path selects text instead of opening it. If opening fails, the tooltip shows "Could not open: <reason>" for 4 seconds.

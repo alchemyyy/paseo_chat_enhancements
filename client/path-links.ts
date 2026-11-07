@@ -4,13 +4,22 @@
 
 import { MAX_PATHS_PER_RESOLVE, type PathKind } from "../shared/contracts";
 import { findPaneWorkspaceId } from "./pane-workspace";
-import { findPathCandidates, selectPaths, type PathCandidate, type PathMatch } from "./path-scan";
+import {
+  findPathCandidates,
+  folderOf,
+  joinRelativePath,
+  selectPaths,
+  type PathCandidate,
+  type PathMatch,
+} from "./path-scan";
 
 export type ResolvePaths = (workspaceId: string | null, paths: string[]) => Promise<(PathKind | null)[]>;
 export type OpenPath = (path: string) => Promise<unknown>;
 
 /** The agent chat scroller (agent-stream/strategy-web.tsx); one per open chat pane */
 const CHAT_SELECTOR = '[data-testid="agent-chat-scroll"]';
+/** A chat row; a message's blocks may be split over several rows sharing one id */
+const MESSAGE_ROW_ATTRIBUTE = "data-message-id";
 const LINK_HIGHLIGHT = "chat-enhancements-path";
 const HOVER_HIGHLIGHT = "chat-enhancements-path-hover";
 const HOVER_CLASS = "chat-enhancements-path-hover";
@@ -52,14 +61,16 @@ function nearestBlock(element: Element | null): Element | null {
   return element;
 }
 
-function collectGroups(root: Element): TextGroup[] {
+/** Groups of the text under `root`; text inside existing links is left out unless `withLinks` */
+function collectGroups(root: Element, withLinks = false): TextGroup[] {
   const groups: TextGroup[] = [];
   let current: TextGroup | null = null;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
       const element = node as Element;
-      if (SKIPPED_TAGS[element.tagName] || (element as HTMLElement).isContentEditable) {
+      const skipped = SKIPPED_TAGS[element.tagName] && !(withLinks && element.tagName === "A");
+      if (skipped || (element as HTMLElement).isContentEditable) {
         current = null;
         return NodeFilter.FILTER_REJECT;
       }
@@ -81,6 +92,31 @@ function collectGroups(root: Element): TextGroup[] {
   }
   for (const group of groups) group.candidates = findPathCandidates(group.text);
   return groups.filter((group) => group.candidates.length > 0);
+}
+
+/** The rows of every message in or around `root`, by message id */
+function messageRowsOf(chat: Element, root: Element): Element[][] {
+  const ids = new Set<string>();
+  const enclosing = root.closest(`[${MESSAGE_ROW_ATTRIBUTE}]`)?.getAttribute(MESSAGE_ROW_ATTRIBUTE);
+  if (enclosing) ids.add(enclosing);
+  for (const row of root.querySelectorAll(`[${MESSAGE_ROW_ATTRIBUTE}]`)) {
+    const id = row.getAttribute(MESSAGE_ROW_ATTRIBUTE);
+    if (id) ids.add(id);
+  }
+  return [...ids].map((id) => [...chat.querySelectorAll(`[${MESSAGE_ROW_ATTRIBUTE}="${CSS.escape(id)}"]`)]);
+}
+
+/**
+ * Paseo's own links whose text is a relative path, such as `NOTES.md` in code. Paseo looks those
+ * up only inside the workspace, so ones naming files elsewhere do nothing when clicked.
+ */
+function relativeLinksIn(rows: Element[]): HTMLAnchorElement[] {
+  return rows.flatMap((row) =>
+    [...row.querySelectorAll<HTMLAnchorElement>("a[href]")].filter((anchor) => {
+      const href = anchor.getAttribute("href");
+      return href !== null && anchor.textContent === href && joinRelativePath("/", href).length > 0;
+    }),
+  );
 }
 
 /** False once React changed or replaced any of the group's text nodes */
@@ -243,15 +279,44 @@ export function startPathLinks(resolve: ResolvePaths, open: OpenPath): () => voi
     links.delete(block);
   }
 
+  /** Relative links in one message, each with the absolute texts it may name, in folder order */
+  async function relativeTargets(workspaceId: string | null, rows: Element[]) {
+    const anchors = relativeLinksIn(rows);
+    if (anchors.length === 0) return [];
+    // The folders the message names are where its relative paths live
+    const groups = rows.flatMap((row) => collectGroups(row, true));
+    await kinds.load(workspaceId, groups.flatMap((group) => group.candidates.flatMap((candidate) => candidate.texts)));
+    const folders = new Set<string>();
+    for (const group of groups) {
+      for (const match of selectPaths(group.candidates, (text) => kinds.kindOf(workspaceId, text))) {
+        const folder = folderOf(match);
+        if (folder) folders.add(folder);
+      }
+    }
+    const targets = anchors.map((anchor) => {
+      const href = anchor.getAttribute("href") ?? "";
+      return { anchor, href, texts: [...folders].flatMap((folder) => joinRelativePath(folder, href)) };
+    });
+    await kinds.load(workspaceId, targets.flatMap((target) => target.texts));
+    return targets;
+  }
+
   async function scanRegion(root: Element): Promise<void> {
     const chat = root.closest(CHAT_SELECTOR);
     if (!chat) return;
     const workspaceId = workspaceOf(chat);
     const groups = collectGroups(root);
-    await kinds.load(workspaceId, groups.flatMap((group) => group.candidates.flatMap((candidate) => candidate.texts)));
+    const messages = messageRowsOf(chat, root);
+    const [, ...targetLists] = await Promise.all([
+      kinds.load(workspaceId, groups.flatMap((group) => group.candidates.flatMap((candidate) => candidate.texts))),
+      ...messages.map((rows) => relativeTargets(workspaceId, rows)),
+    ]);
     if (stopped) return;
+    const rows = messages.flat();
     for (const block of [...links.keys()]) {
-      if (root.contains(block)) removeLinks(block);
+      // A relative link may be relinked by a scan of any row of its message
+      const relativeLink = block.tagName === "A" && rows.some((row) => row.contains(block));
+      if (root.contains(block) || relativeLink) removeLinks(block);
     }
     for (const group of groups) {
       // A changed group was queued again by the observer and is linked by that scan
@@ -265,6 +330,16 @@ export function startPathLinks(resolve: ResolvePaths, open: OpenPath): () => voi
         linkHighlight.add(range);
       }
       links.set(group.block, blockLinks);
+    }
+    for (const { anchor, href, texts } of targetLists.flat()) {
+      if (!anchor.isConnected || anchor.textContent !== href) continue;
+      const text = texts.find((candidate) => kinds.kindOf(workspaceId, candidate));
+      const kind = text && kinds.kindOf(workspaceId, text);
+      if (!text || !kind) continue;
+      const range = document.createRange();
+      range.selectNodeContents(anchor);
+      links.set(anchor, [{ range, text, kind }]);
+      linkHighlight.add(range);
     }
   }
 
